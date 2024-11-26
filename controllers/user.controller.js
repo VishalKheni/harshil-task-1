@@ -54,7 +54,7 @@ const addtoken = async (req, res) => {
       userId,
     });
     if (!token) {
-      return res.status(400).json({ message: "Some Error occured " });
+      return res.status(400).json({ message: "Some Error occured" });
     }
     return res.status(201).json({ message: "token add successfully", token });
   } catch (error) {
