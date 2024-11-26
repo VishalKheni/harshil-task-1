@@ -1,13 +1,13 @@
-const {User, Token} = require("../model/index");
+const { User, Token } = require("../model/index");
 const bcrypt = require("bcrypt");
 const generateToken = require("../utils/jwtTokenHndler");
 
 const register = async (req, res) => {
   const { firstName, lastName, email, password } = req.body;
 
-  const emailExists = await  User.findOne({ where: { email } });
+  const emailExists = await User.findOne({ where: { email } });
   if (emailExists) {
-    return res.status(400).json({ message: "Email already exists" });
+    return res.status(403).json({ message: "Email already exists" });
   }
 
   const user = await User.create({ firstName, lastName, email, password });
@@ -59,12 +59,36 @@ const addtoken = async (req, res) => {
     return res.status(201).json({ message: "token add successfully", token });
   } catch (error) {
     console.log("error", error);
-    return res.status(404).json({ message: "Internal server error", error})
+    return res.status(404).json({ message: "Internal server error", error });
   }
+};
+
+const getData = async (req, res) => {
+  const { userId } = req.user;
+
+  const getdata = await User.findOne({
+    where: { id: userId },
+    attributes: { exclude: ["password"] },
+    include: [
+      {
+        model: Token,
+        as: "tokens",
+      },
+    ],
+  });
+
+  if (!getdata) {
+    return res.status(403).json({ message: "data not found" });
+  }
+
+  return res
+    .status(200)
+    .json({ message: "Data retrieved successfully", data: getdata });
 };
 
 module.exports = {
   register,
   login,
   addtoken,
+  getData,
 };

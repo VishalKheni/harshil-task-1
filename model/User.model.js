@@ -12,10 +12,20 @@ const User = (sequelize, DataTypes) => {
       firstName: {
         type: DataTypes.STRING,
         allowNull: false,
+        validate: {
+          notNull: {
+            msg: 'Please enter your firstName',
+          },
+        }  
       },
       lastName: {
         type: DataTypes.STRING,
         allowNull: false,
+        validate: {
+          notNull: {
+            msg: 'Please enter your lastName',
+          },
+        }  
       },
       email: {
         type: DataTypes.STRING,
@@ -28,7 +38,6 @@ const User = (sequelize, DataTypes) => {
       profile: {
         type: DataTypes.STRING,
       },
-
       otp: {
         type: DataTypes.STRING,
       },
