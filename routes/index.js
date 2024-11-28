@@ -3,6 +3,6 @@ const app = express();
 
 const userRoutes = require('./user.routes')
 
-app.use('/user', userRoutes);
+app.use('/user_router', userRoutes);
 
 module.exports = app

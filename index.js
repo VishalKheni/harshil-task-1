@@ -1,15 +1,18 @@
 const express = require("express");
-const db = require("./model/index");
+var morgan = require('morgan')
+const db = require("./models/index");
 const bodyParser = require("body-parser");
 const routes = require("./routes/index");
 const app = express();
 
 app.use(express.json());
+app.use(express.static('public'))
 app.use(bodyParser.urlencoded({ extended: false }));
+app.use(morgan('dev'))
 
 app.use("/api", routes);
 
-const port = 3000;
+const port = 5000;
 app.listen(port, async () => {
   try {
     await db.sequelize.sync({ alert: true, force: false });
