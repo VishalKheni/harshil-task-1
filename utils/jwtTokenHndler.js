@@ -1,9 +1,9 @@
-const jwt = require('jsonwebtoken');
-accessskey='@£$%^&*'
-
-function generateToken(data) {
-    return jwt.sign(data, accessskey, { expiresIn: "1w" })
-}
+const jwt = require("jsonwebtoken");
+require("dotenv").config();
 
 
-module.exports =  generateToken;
+const generateToken = (data) => {
+  return jwt.sign(data, process.env.accessskey, { expiresIn: "1w" });
+};
+
+module.exports = generateToken;
