@@ -3,8 +3,8 @@ const bcrypt = require("bcrypt");
 const generateToken = require("../utils/jwtTokenHndler");
 const sendOTPByEmail = require("../utils/nodemailer");
 const fs = require("fs");
-const path = require('path');
-
+const path = require("path");
+const Op = require("sequelize");
 
 const register = async (req, res) => {
   const {
@@ -74,6 +74,7 @@ const register = async (req, res) => {
   }
 };
 
+// login user with email and password
 const login = async (req, res) => {
   const { email, password, device_id, device_type, device_token } = req.body;
 
@@ -95,16 +96,16 @@ const login = async (req, res) => {
       });
     }
 
-    const otp = `${Math.floor(1000 + Math.random() * 9000)}`;
-    const fullname = user.firstName + " " + user.lastName;
-    const otpSent = await sendOTPByEmail(email, otp, fullname);
+    // const otp = `${Math.floor(1000 + Math.random() * 9000)}`;
+    // const fullname = user.firstName + " " + user.lastName;
+    // const otpSent = await sendOTPByEmail(email, otp, fullname);
 
-    if (!otpSent) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send OTP. Please try again.",
-      });
-    }
+    // if (!otpSent) {
+    //   return res.status(500).json({
+    //     success: false,
+    //     message: "Failed to send OTP. Please try again.",
+    //   });
+    // }
 
     const existingToken = await Token.findOne({
       where: { device_id, userId: user.id },
@@ -123,9 +124,9 @@ const login = async (req, res) => {
       });
     }
 
-    user.otp = otp;
-    user.otp_created_at = new Date();
-    await user.save();
+    // user.otp = otp;
+    // user.otp_created_at = new Date();
+    // await user.save();
 
     const token = generateToken({ userId: user.id });
 
@@ -172,13 +173,12 @@ const logout = async (req, res) => {
   }
 };
 
+// verify otp with email and otp
 const verifyOtp = async (req, res) => {
-  // const { userId } = req.user;
   const { email, otp } = req.body;
 
   try {
     const user = await User.findOne({ where: { email } });
-    // console.log('user', user)
 
     if (!user) {
       return res
@@ -187,7 +187,10 @@ const verifyOtp = async (req, res) => {
     }
 
     if (user.otp != otp) {
-      return res.status(400).json({ success: false, message: "OTP Invalid. Please enter valid OTP" });
+      return res.status(400).json({
+        success: false,
+        message: "OTP Invalid. Please enter valid OTP",
+      });
     }
 
     const otpExpirationTime = 2 * 60 * 1000; // OTP valid for 2 minutes
@@ -218,6 +221,7 @@ const verifyOtp = async (req, res) => {
   }
 };
 
+// resend otp with email
 const resendOTP = async (req, res) => {
   const { email } = req.body;
 
@@ -231,25 +235,22 @@ const resendOTP = async (req, res) => {
     }
 
     // Check if the user has recently requested an OTP
-    const otpRequestLimit = 2 * 60 * 1000; // valid 2 minitue
+    const otpRequestLimit = 1 * 60 * 1000; // valid 1 minitue
     const timeSinceLastOtp = new Date() - new Date(user.otp_created_at || 0);
 
     if (timeSinceLastOtp < otpRequestLimit) {
       return res.status(429).json({
         success: false,
-        message: "You can request a new OTP only after 2 minute.",
+        message: "You can request a new OTP only after 1 minute.",
       });
     }
 
     const newOTP = `${Math.floor(1000 + Math.random() * 9000)}`;
-
-    // Update the user's OTP and timestamp in the database
     await User.update(
       { otp: newOTP, otp_created_at: new Date() },
       { where: { id: user.id } }
     );
 
-    // Send the new OTP via email
     const fullname = user.firstName + " " + user.lastName;
     await sendOTPByEmail(email, newOTP, fullname);
 
@@ -267,7 +268,7 @@ const resendOTP = async (req, res) => {
   }
 };
 
-
+// send forgot password otp in email
 const forgotPassword = async (req, res) => {
   const { email } = req.body;
 
@@ -280,19 +281,18 @@ const forgotPassword = async (req, res) => {
       });
     }
 
-    const resetOTP = `${Math.floor(1000 + Math.random() * 9000)}`;
+    const OTP = `${Math.floor(1000 + Math.random() * 9000)}`;
     await user.update({
-      otp: resetOTP,
+      otp: OTP,
       otp_created_at: new Date(),
     });
 
     const fullname = user.firstName + " " + user.lastName;
-    await sendOTPByEmail(email, resetOTP, fullname);
+    await sendOTPByEmail(email, OTP, fullname);
 
     return res.status(200).json({
       success: true,
-      message: "Reset OTP sent to your registered email.",   
-      resetOTP,
+      message: "Reset OTP sent to your registered email.",
     });
   } catch (error) {
     console.error("Error in forgot password:", error);
@@ -303,6 +303,7 @@ const forgotPassword = async (req, res) => {
   }
 };
 
+// reset password after verify otp
 const resetPassword = async (req, res) => {
   const { email, otp, newPassword } = req.body;
 
@@ -316,7 +317,10 @@ const resetPassword = async (req, res) => {
     }
 
     if (user.otp !== otp) {
-      return res.status(400).json({ success: false, message: "Invalid OTP" });
+      return res.status(400).json({
+        success: false,
+        message: "OTP Invalid. Please enter valid OTP",
+      });
     }
 
     const otpExpirationTime = 2 * 60 * 1000; // OTP valid for 2 minutes
@@ -324,7 +328,10 @@ const resetPassword = async (req, res) => {
       new Date() - new Date(user.otp_created_at) <= otpExpirationTime;
 
     if (!isOtpValid) {
-      return res.status(400).json({ success: false, message: "OTP Expired" });
+      return res.status(400).json({
+        success: false,
+        message: "OTP has expired. Please request a new one.",
+      });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -335,9 +342,13 @@ const resetPassword = async (req, res) => {
       otp_created_at: null,
     });
 
-    return res
-      .status(200)
-      .json({ success: true, message: "Password reset successfully" });
+    await Token.destroy({ where: { userId: user.id } });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Password reset successfully. You have been logged out from all devices.",
+    });
   } catch (error) {
     console.error("Error in resetting password:", error);
     return res.status(500).json({
@@ -347,6 +358,7 @@ const resetPassword = async (req, res) => {
   }
 };
 
+// change current password
 const changePassword = async (req, res) => {
   const { oldPassword, newPassword } = req.body;
   const { userId } = req.user;
@@ -376,9 +388,10 @@ const changePassword = async (req, res) => {
       { where: { id: user.id } }
     );
 
-    return res
-      .status(200)
-      .json({ success: true, message: "Password changed successfully" });
+    return res.status(200).json({
+      success: true,
+      message: "Password changed successfully.",
+    });
   } catch (error) {
     console.error("Error:", error);
     return res
@@ -387,6 +400,7 @@ const changePassword = async (req, res) => {
   }
 };
 
+// upload profile image
 const addProfileImage = async (req, res) => {
   const { userId } = req.user;
 
@@ -429,7 +443,7 @@ const addProfileImage = async (req, res) => {
   }
 };
 
-
+// edit prodile detail
 const editProfile = async (req, res) => {
   const { userId } = req.user;
   const { firstName, lastName, email } = req.body;
@@ -441,28 +455,36 @@ const editProfile = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(400).json({ success: false, message: "User not found" });
+      return res
+        .status(400)
+        .json({ success: false, message: "User not found" });
     }
 
     if (email === user.email) {
-        return res.status(400).json({ success: false, message: "Email is already in use" }); 
+      return res
+        .status(400)
+        .json({ success: false, message: "Email is already in use" });
     }
 
     // Update the user profile fields
     const updatedUserData = {
-      firstName: firstName || user.firstName, 
-      lastName: lastName || user.lastName,    
-      email: email || user.email,              
+      firstName: firstName || user.firstName,
+      lastName: lastName || user.lastName,
+      email: email || user.email,
     };
-
 
     if (req.file) {
       if (user.profile) {
-        const oldImagePath = path.join(__dirname, '..', 'public', user.profile.trim()); 
+        const oldImagePath = path.join(
+          __dirname,
+          "..",
+          "public",
+          user.profile.trim()
+        );
         if (fs.existsSync(oldImagePath)) {
-          fs.unlinkSync(oldImagePath); 
+          fs.unlinkSync(oldImagePath);
         } else {
-          console.log(`Old image not found: ${oldImagePath}`); 
+          console.log(`Old image not found: ${oldImagePath}`);
         }
       }
       updatedUserData.profile = req.file.filename;
@@ -484,10 +506,13 @@ const editProfile = async (req, res) => {
     });
   } catch (error) {
     console.error("Error:", error);
-    return res.status(500).json({ success: false, message: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal Server Error" });
   }
 };
 
+// rte=rive profile detail including deveice detail
 const getProfile = async (req, res) => {
   const { userId } = req.user;
 
@@ -511,7 +536,7 @@ const getProfile = async (req, res) => {
     .json({ message: "Data retrieved successfully", data: getdata });
 };
 
-
+// delete account detail
 const deleteAccount = async (req, res) => {
   const { userId } = req.user;
 
@@ -535,9 +560,6 @@ const deleteAccount = async (req, res) => {
       .json({ success: false, message: "Internal Server Error" });
   }
 };
-
-
-
 
 module.exports = {
   register,
