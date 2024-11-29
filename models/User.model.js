@@ -45,6 +45,14 @@ const User = (sequelize, DataTypes) => {
         type: DataTypes.DATE,
         allowNull: true,
       },
+      is_verify: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false, 
+      },
+      is_account_setup: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false, 
+      },
     },
     {
       timestamps: true,

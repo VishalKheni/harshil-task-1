@@ -4,7 +4,7 @@ const generateToken = require("../utils/jwtTokenHndler");
 const sendOTPByEmail = require("../utils/nodemailer");
 const fs = require("fs");
 const path = require("path");
-const Op = require("sequelize");
+const sequelize = require("sequelize");
 
 const register = async (req, res) => {
   const {
@@ -35,13 +35,6 @@ const register = async (req, res) => {
       password,
     });
 
-    await Token.create({
-      device_id,
-      device_type,
-      device_token,
-      userId: user.id,
-    });
-
     if (!user) {
       return res.status(400).json({
         success: false,
@@ -50,7 +43,7 @@ const register = async (req, res) => {
     }
 
     const fullname = user.firstName + " " + user.lastName;
-    const otpSent = await sendOTPByEmail(email, otp, fullname);
+    const otpSent = await sendOTPByEmail(user.email, otp, fullname);
     if (!otpSent) {
       await Token.destroy({ where: { userId: user.id } });
       await User.destroy({ where: { id: user.id } });
@@ -60,11 +53,18 @@ const register = async (req, res) => {
       });
     }
 
+    await Token.create({
+      device_id,
+      device_type,
+      device_token,
+      userId: user.id,
+    });
+
     const token = generateToken({ userId: user.id });
 
     return res.status(201).json({
       success: true,
-      message: "The OTP has been sent to your registered email.",
+      message: "Account created successfully",
       user,
       token,
     });
@@ -96,16 +96,20 @@ const login = async (req, res) => {
       });
     }
 
-    // const otp = `${Math.floor(1000 + Math.random() * 9000)}`;
-    // const fullname = user.firstName + " " + user.lastName;
-    // const otpSent = await sendOTPByEmail(email, otp, fullname);
+    const otp = `${Math.floor(1000 + Math.random() * 9000)}`;
+    const fullname = user.firstName + " " + user.lastName;
+    const otpSent = await sendOTPByEmail(email, otp, fullname);
 
-    // if (!otpSent) {
-    //   return res.status(500).json({
-    //     success: false,
-    //     message: "Failed to send OTP. Please try again.",
-    //   });
-    // }
+    if (!otpSent) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send OTP. Please try again.",
+      });
+    }
+
+    user.otp = otp;
+    user.otp_created_at = new Date();
+    await user.save();
 
     const existingToken = await Token.findOne({
       where: { device_id, userId: user.id },
@@ -124,10 +128,6 @@ const login = async (req, res) => {
       });
     }
 
-    // user.otp = otp;
-    // user.otp_created_at = new Date();
-    // await user.save();
-
     const token = generateToken({ userId: user.id });
 
     return res.status(201).json({
@@ -145,6 +145,13 @@ const login = async (req, res) => {
 const logout = async (req, res) => {
   const { device_id } = req.body;
   const { userId } = req.user;
+
+  if (!device_id) {
+    return res.status(400).json({
+      success: false,
+      message: "Device ID is required for logout.",
+    });
+  }
 
   try {
     const token = await Token.findOne({
@@ -246,6 +253,13 @@ const resendOTP = async (req, res) => {
     }
 
     const newOTP = `${Math.floor(1000 + Math.random() * 9000)}`;
+    if (!newOTP) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send OTP. Please try again.",
+      });
+    }
+
     await User.update(
       { otp: newOTP, otp_created_at: new Date() },
       { where: { id: user.id } }
@@ -282,13 +296,20 @@ const forgotPassword = async (req, res) => {
     }
 
     const OTP = `${Math.floor(1000 + Math.random() * 9000)}`;
+
     await user.update({
       otp: OTP,
       otp_created_at: new Date(),
     });
 
     const fullname = user.firstName + " " + user.lastName;
-    await sendOTPByEmail(email, OTP, fullname);
+    const sendOtp = await sendOTPByEmail(email, OTP, fullname);
+    if (!sendOtp) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send OTP. Please try again.",
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -346,8 +367,7 @@ const resetPassword = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message:
-        "Password reset successfully. You have been logged out from all devices.",
+      message: "Password reset successfully.",
     });
   } catch (error) {
     console.error("Error in resetting password:", error);
@@ -360,7 +380,7 @@ const resetPassword = async (req, res) => {
 
 // change current password
 const changePassword = async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
+  const { oldPassword, newPassword, device_id } = req.body;
   const { userId } = req.user;
 
   try {
@@ -387,6 +407,14 @@ const changePassword = async (req, res) => {
       { password: hashedNewPassword },
       { where: { id: user.id } }
     );
+
+    // delete other deveice
+    await Token.destroy({
+      where: {
+        userId,
+        device_id: { [sequelize.Op.ne]: device_id },
+      },
+    });
 
     return res.status(200).json({
       success: true,
@@ -436,7 +464,7 @@ const addProfileImage = async (req, res) => {
       user: updatedUser,
     });
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Profile Image upload Error:", error);
     return res
       .status(500)
       .json({ success: false, message: "Internal Server Error" });
@@ -505,7 +533,7 @@ const editProfile = async (req, res) => {
       user: updatedUser,
     });
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Profile update Error:", error);
     return res
       .status(500)
       .json({ success: false, message: "Internal Server Error" });

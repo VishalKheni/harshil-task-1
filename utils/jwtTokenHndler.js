@@ -3,7 +3,7 @@ require("dotenv").config();
 
 
 const generateToken = (data) => {
-  return jwt.sign(data, process.env.accessskey, { expiresIn: "1w" });
+  return jwt.sign(data, process.env.accessskey);
 };
 
 module.exports = generateToken;

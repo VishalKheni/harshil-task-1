@@ -20,6 +20,15 @@ const Token = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: false,
       },
+      tokenVersion: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+      },
+      is_deleted: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false, 
+      },
     },
     {
       timestamps: true,

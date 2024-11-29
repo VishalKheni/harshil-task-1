@@ -11,7 +11,7 @@ router.post("/logout", verifyToken, user.logout);
 router.post("/verifyotp", user.verifyOtp);
 router.post("/resendotp", user.resendOTP);
 
-router.post("/sendforgotpasswordotp", user.forgotPassword);
+router.post("/forgotpassword", user.forgotPassword);
 router.patch("/resetpassword", user.resetPassword);
 
 // change current passsword

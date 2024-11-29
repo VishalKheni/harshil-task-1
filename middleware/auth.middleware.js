@@ -18,11 +18,6 @@ const verifyToken = async (req, res, next) => {
     }
 
     const decodedToken = jwt.verify(token, accessskey);
-    // const user = await db.User.findByPk(decodedToken.userId);
-    // const tokens = await db.Token.findByPk(decodedToken.tokenId);
-    // if (!user || !tokens || (tokens.tokenVersion !== decodedToken.tokenVersion)) {
-    //   return res.status(401).json({ error: 'Invalid token' });
-    // }
 
     if (!decodedToken) {
       return res.status(401).send({ message: "Unauthorized" });
