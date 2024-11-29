@@ -30,7 +30,7 @@ const verifyToken = async (req, res, next) => {
 
     const user = await User.findByPk(userId);
     if (!user) {
-      return res.status(401).json({ success: false, message: "User not found" });
+      return res.status(404).json({ success: false, message: "User not found" });
     }
 
     const tokens = await Token.findByPk(tokenId);

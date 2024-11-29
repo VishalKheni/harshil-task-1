@@ -1,10 +1,10 @@
 const { User, Token } = require("../models/index");
 const bcrypt = require("bcrypt");
 const generateToken = require("../utils/jwtTokenHandler");
-const sendOTPByEmail = require("../utils/nodemailer");
+const { sendOTPByEmail, generateOTP } = require("../helper/helper");
 const fs = require("fs");
 const path = require("path");
-const sequelize = require("sequelize");
+const { Op } = require("sequelize");
 
 const register = async (req, res) => {
   const {
@@ -25,7 +25,7 @@ const register = async (req, res) => {
         .json({ success: false, message: "Email already exists" });
     }
 
-    const otp = `${Math.floor(1000 + Math.random() * 9000)}`;
+    const otp = generateOTP();
     const user = await User.create({
       firstName,
       lastName,
@@ -54,14 +54,19 @@ const register = async (req, res) => {
       });
     }
 
-    await Token.create({
+    const tokenRecord = await Token.create({
       device_id,
       device_type,
       device_token,
+      tokenVersion: 1,
       userId: user.id,
     });
 
-    // const token = generateToken({ userId: user.id });
+    const token = generateToken({
+      userId: user.id,
+      tokenId: tokenRecord.id,
+      tokenVersion: tokenRecord.tokenVersion,
+    });
 
     return res.status(201).json({
       success: true,
@@ -70,7 +75,7 @@ const register = async (req, res) => {
         email: user.email,
         otp: user.otp,
       },
-      // token,
+      token,
     });
   } catch (error) {
     console.error("Error signing up user:", error);
@@ -100,7 +105,7 @@ const login = async (req, res) => {
       });
     }
 
-    const otp = `${Math.floor(1000 + Math.random() * 9000)}`;
+    const otp = generateOTP();
     const fullname = user.firstName + " " + user.lastName;
     const otpSent = await sendOTPByEmail(email, otp, fullname);
 
@@ -115,19 +120,19 @@ const login = async (req, res) => {
     user.otp_created_at = new Date();
     await user.save();
 
-    const existingToken = await Token.findOne({
+    let tokenRecord = await Token.findOne({
       where: { device_id, userId: user.id },
     });
 
-    if (existingToken) {
-      existingToken.device_token = device_token;
-      existingToken.device_type = device_type;
-      const currentVersion = existingToken.tokenVersion || 0;
+    if (tokenRecord) {
+      tokenRecord.device_token = device_token;
+      tokenRecord.device_type = device_type;
+      const currentVersion = tokenRecord.tokenVersion || 0;
       const randomIncrement = Math.floor(1 + Math.random() * 9);
-      existingToken.tokenVersion = currentVersion + randomIncrement;
-      await existingToken.save();
+      tokenRecord.tokenVersion = currentVersion + randomIncrement;
+      await tokenRecord.save();
     } else {
-      await Token.create({
+      tokenRecord = await Token.create({
         device_id,
         device_type,
         device_token,
@@ -138,11 +143,11 @@ const login = async (req, res) => {
 
     const token = generateToken({
       userId: user.id,
-      tokenId: existingToken.id,
-      tokenVersion: existingToken.tokenVersion,
+      tokenId: tokenRecord.id,
+      tokenVersion: tokenRecord.tokenVersion,
     });
 
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
       message: "The OTP has been sent to your registered email.",
       otp,
@@ -264,7 +269,7 @@ const resendOTP = async (req, res) => {
       });
     }
 
-    const newOTP = `${Math.floor(1000 + Math.random() * 9000)}`;
+    const newOTP = generateOTP();
     if (!newOTP) {
       return res.status(500).json({
         success: false,
@@ -307,7 +312,7 @@ const forgotPassword = async (req, res) => {
       });
     }
 
-    const OTP = `${Math.floor(1000 + Math.random() * 9000)}`;
+    const OTP = generateOTP();
 
     await user.update({
       otp: OTP,
@@ -409,7 +414,7 @@ const changePassword = async (req, res) => {
     if (!isOldPasswordValid) {
       return res
         .status(400)
-        .json({ success: false, message: "Old password is incorrect" });
+        .json({ success: false, message: "Current password is incorrect" });
     }
 
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
@@ -424,7 +429,7 @@ const changePassword = async (req, res) => {
     await Token.destroy({
       where: {
         userId,
-        device_id: { [sequelize.Op.ne]: device_id },
+        device_id: { [Op.ne]: device_id },
       },
     });
 
