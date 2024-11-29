@@ -15,7 +15,7 @@ app.use("/api", routes);
 const port = 5000;
 app.listen(port, async () => {
   try {
-    await db.sequelize.sync({ alert: true, force: true });
+    await db.sequelize.sync({ alert: true, force: false });
     console.log("Model has been synced successfully.");
   } catch (error) {
     console.error("Unable to connect to the database:", error);

@@ -1,6 +1,6 @@
 const { User, Token } = require("../models/index");
 const bcrypt = require("bcrypt");
-const generateToken = require("../utils/jwtTokenHndler");
+const generateToken = require("../utils/jwtTokenHandler");
 const sendOTPByEmail = require("../utils/nodemailer");
 const fs = require("fs");
 const path = require("path");
@@ -44,6 +44,7 @@ const register = async (req, res) => {
 
     const fullname = user.firstName + " " + user.lastName;
     const otpSent = await sendOTPByEmail(user.email, otp, fullname);
+
     if (!otpSent) {
       await Token.destroy({ where: { userId: user.id } });
       await User.destroy({ where: { id: user.id } });
@@ -60,13 +61,16 @@ const register = async (req, res) => {
       userId: user.id,
     });
 
-    const token = generateToken({ userId: user.id });
+    // const token = generateToken({ userId: user.id });
 
     return res.status(201).json({
       success: true,
-      message: "Account created successfully",
-      user,
-      token,
+      message: "The OTP has been sent to your registered email.",
+      user: {
+        email: user.email,
+        otp: user.otp,
+      },
+      // token,
     });
   } catch (error) {
     console.error("Error signing up user:", error);
@@ -118,22 +122,30 @@ const login = async (req, res) => {
     if (existingToken) {
       existingToken.device_token = device_token;
       existingToken.device_type = device_type;
+      const currentVersion = existingToken.tokenVersion || 0;
+      const randomIncrement = Math.floor(1 + Math.random() * 9);
+      existingToken.tokenVersion = currentVersion + randomIncrement;
       await existingToken.save();
     } else {
       await Token.create({
         device_id,
         device_type,
         device_token,
+        tokenVersion: Math.floor(1 + Math.random() * 9),
         userId: user.id,
       });
     }
 
-    const token = generateToken({ userId: user.id });
+    const token = generateToken({
+      userId: user.id,
+      tokenId: existingToken.id,
+      tokenVersion: existingToken.tokenVersion,
+    });
 
     return res.status(201).json({
       success: true,
-      message: "Login successfully",
-      user,
+      message: "The OTP has been sent to your registered email.",
+      otp,
       token,
     });
   } catch (error) {
@@ -213,7 +225,7 @@ const verifyOtp = async (req, res) => {
 
     // Update user to mark OTP as verified
     await User.update(
-      { otp: null, otp_created_at: null },
+      { is_verify: true, otp: null, otp_created_at: null },
       { where: { id: user.id } }
     );
 
@@ -540,7 +552,7 @@ const editProfile = async (req, res) => {
   }
 };
 
-// rte=rive profile detail including deveice detail
+// retrive profile detail including deveice detail
 const getProfile = async (req, res) => {
   const { userId } = req.user;
 
