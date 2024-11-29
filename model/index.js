@@ -1,10 +1,10 @@
 const Sequelize = require("sequelize");
+const DB = require("../config/db.connect");
 
-const sequelize = new Sequelize("task", "root", "", {
-  host: "localhost",
-  dialect: "mysql",
+const sequelize = new Sequelize(DB.DBName, DB.DBUsername, DB.DBPassword, {
+  host: DB.DBhost,
+  dialect: DB.DBdialect,
 });
-
 const db = {};
 
 const User = require("./User.model");
