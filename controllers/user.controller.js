@@ -6,86 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const sequelize = require("sequelize");
 
-// const signUp = async (req, res) => {
-//   const {
-//     firstName,
-//     lastName,
-//     email,
-//     password,
-//     device_id,
-//     device_type,
-//     device_token,
-//   } = req.body;
-
-//   try {
-//     const emailExists = await DB.User.findOne({ where: { email } });
-//     if (emailExists) {
-//       return res
-//         .status(403)
-//         .json({ success: false, message: "Email already exists" });
-//     }
-
-//     const otp = generateOTP();
-//     const user = await DB.User.create({
-//       firstName,
-//       lastName,
-//       email,
-//       otp,
-//       otp_created_at: new Date(),
-//       otp_type: "signup",
-//       password,
-//     });
-
-//     if (!user) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "An error occurred while registering the user",
-//       });
-//     }
-
-//     const fullname = `${user.firstName} ${user.lastName}`;
-//     const otpSent = await sendOTPByEmail(user.email, otp, fullname);
-
-//     if (!otpSent) {
-//       await DB.Token.destroy({ where: { userId: user.id } });
-//       await DB.User.destroy({ where: { id: user.id } });
-//       return res.status(500).json({
-//         success: false,
-//         message: "Failed to send OTP. Please try again.",
-//       });
-//     }
-
-//     const tokenRecord = await DB.Token.create({
-//       device_id,
-//       device_type,
-//       device_token,
-//       tokenVersion: 1,
-//       userId: user.id,
-//     });
-
-//     const token = generateToken({
-//       userId: user.id,
-//       tokenId: tokenRecord.id,
-//       tokenVersion: tokenRecord.tokenVersion,
-//     });
-
-//     return res.status(201).json({
-//       success: true,
-//       message: "The OTP has been sent to your registered email.",
-//       user: {
-//         email: user.email,
-//         otp: user.otp,
-//       },
-//       token,
-//     });
-//   } catch (error) {
-//     console.error("Error signing up user:", error);
-//     res.status(500).json({ success: false, message: "Internal Server Error" });
-//   }
-// };
-
 // sign up new account
-
 const signUp = async (req, res) => {
   const {
     firstName,
@@ -121,7 +42,7 @@ const signUp = async (req, res) => {
         otp,
         otp_created_at: new Date(),
         otp_type: "signup",
-        otp_verified: false,
+        // otp_verified: false,
         password,
       },
       { transaction }
@@ -219,7 +140,7 @@ const login = async (req, res) => {
     user.otp = otp;
     user.otp_created_at = new Date();
     user.otp_type = "login";
-    user.otp_verified = false;
+    // user.otp_verified = false;
     await user.save();
 
     let tokenRecord = await DB.Token.findOne({
@@ -531,7 +452,6 @@ const resetPassword = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-
     await user.update({
       password: hashedPassword,
       otp: null,
@@ -540,15 +460,9 @@ const resetPassword = async (req, res) => {
       otp_verified: false,
     });
 
-    await DB.Token.findOne({ where: { userId: user.id } });
-    // await DB.Token.destroy({
-    //   where: {
-    //     userId: token.userId,
-    //     id: token.id,
-    //     tokenVersion: token.tokenVersion,
-    //   },
-    // });
-    // token.is_deleted = true;
+    const token = await DB.Token.findOne({ where: { userId: user.id } });
+    await DB.Token.destroy({ where: { userId: token.userId } });
+    token.is_deleted = true;
 
     return res.status(200).json({
       success: true,
@@ -571,14 +485,14 @@ const resendOTPForPassword = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User with this email does not exist",
+        message: "User with this email does not exist.",
       });
     }
 
     if (user.otp_type !== "forgot_password") {
       return res.status(400).json({
         success: false,
-        message: "Invalid OTP type. Please request a new OTP",
+        message: "Invalid OTP type.",
       });
     }
 
@@ -647,7 +561,6 @@ const changePassword = async (req, res) => {
       where: {
         userId: req.user.id,
         id: req.token.id,
-        tokenVersion: req.token.tokenVersion,
       },
     });
 
@@ -682,8 +595,6 @@ const changePassword = async (req, res) => {
 
 // upload profile image
 const addProfileImage = async (req, res) => {
-  const { userId } = req.user;
-
   try {
     //set this validation on validation file
     if (!req.file) {
