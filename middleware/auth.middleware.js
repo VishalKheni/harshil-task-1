@@ -13,7 +13,7 @@ const verifyToken = async (req, res, next) => {
       });
     }
 
-    const token = authHeader.split(" ")[1]; 
+    const token = authHeader.split(" ")[1];
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -25,26 +25,26 @@ const verifyToken = async (req, res, next) => {
 
     const { userId, tokenId, tokenVersion } = decodedToken;
     if (!userId || !tokenId || !tokenVersion) {
-      return res.status(401).json({ success: false, message: "Invalid token payload" });
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid token payload" });
     }
 
     const user = await User.findByPk(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-
     const tokens = await Token.findByPk(tokenId);
-    if (!tokens || tokens.tokenVersion !== tokenVersion) {
-      return res.status(401).json({ success: false, message: "Invalid token or version mismatch" });
+
+    if (!user || !tokens || (tokens.tokenVersion !== tokenVersion)) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-
-    req.user = { userId: user.id };
+    
+    req.user = user;
     req.token = tokens;
-
-    next(); 
+    next();
   } catch (error) {
     console.error("Error verifying JWT:", error);
-    return res.status(500).json({ success: false, message: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal Server Error" });
   }
 };
 

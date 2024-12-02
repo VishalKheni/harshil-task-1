@@ -14,18 +14,18 @@ const User = (sequelize, DataTypes) => {
         allowNull: false,
         validate: {
           notNull: {
-            msg: 'Please enter your firstName',
+            msg: "Please enter your firstName",
           },
-        }  
+        },
       },
       lastName: {
         type: DataTypes.STRING,
         allowNull: false,
         validate: {
           notNull: {
-            msg: 'Please enter your lastName',
+            msg: "Please enter your lastName",
           },
-        }  
+        },
       },
       email: {
         type: DataTypes.STRING,
@@ -41,17 +41,20 @@ const User = (sequelize, DataTypes) => {
       otp: {
         type: DataTypes.INTEGER,
       },
-      otp_created_at: { 
+      otp_created_at: {
         type: DataTypes.DATE,
         allowNull: true,
       },
-      is_verify: {
+      otp_type: {
+        type: DataTypes.STRING,
+      },
+      otp_verified: {
         type: DataTypes.BOOLEAN,
-        defaultValue: false, 
+        defaultValue: false,
       },
       is_account_setup: {
         type: DataTypes.BOOLEAN,
-        defaultValue: false, 
+        defaultValue: false,
       },
     },
     {
@@ -82,7 +85,7 @@ const User = (sequelize, DataTypes) => {
       onUpdate: "CASCADE",
     });
   };
-  return User
+  return User;
 };
 
 module.exports = User;

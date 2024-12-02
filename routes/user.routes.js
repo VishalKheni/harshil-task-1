@@ -4,12 +4,17 @@ const user = require("../controllers/user.controller");
 const verifyToken = require("../middleware/auth.middleware");
 const upload = require("../middleware/multer.middleware");
 
-router.post("/register", user.register);
+router.post("/register", user.signUp);
 router.post("/login", user.login);
 router.post("/logout", verifyToken, user.logout);
 
+// verify otp for signup and login
 router.post("/verifyotp", user.verifyOtp);
 router.post("/resendotp", user.resendOTP);
+
+// verify otp for forgot password
+router.post("/verifyotpforforgotpassword", user.verifyOtpForForgotPassword);
+router.post("/resendotpforpassword", user.resendOTPForPassword);
 
 router.post("/forgotpassword", user.forgotPassword);
 router.patch("/resetpassword", user.resetPassword);

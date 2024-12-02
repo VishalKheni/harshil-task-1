@@ -33,6 +33,7 @@ const Token = (sequelize, DataTypes) => {
     {
       timestamps: true,
       tableName: "tbl_token",
+      paranoid: true,
     }
   );
 
