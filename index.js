@@ -11,7 +11,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(morgan('dev'))
 
 app.use("/api", routes);
-
+  
 const port = 5000;
 app.listen(port, async () => {
   try {

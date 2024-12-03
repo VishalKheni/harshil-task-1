@@ -25,15 +25,10 @@ const Token = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: 0,
       },
-      is_deleted: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: false, 
-      },
     },
     {
       timestamps: true,
       tableName: "tbl_token",
-      paranoid: true,
     }
   );
 

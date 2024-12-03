@@ -7,7 +7,7 @@ const path = require("path");
 const { Op } = require("sequelize");
 
 // sign up new account
-const signUp = async (req, res) => {
+const signUpUser = async (req, res) => {
   const {
     firstName,
     lastName,
@@ -27,7 +27,6 @@ const signUp = async (req, res) => {
     });
 
     if (emailExists) {
-      await transaction.rollback();
       return res
         .status(403)
         .json({ success: false, message: "Email already exists" });
@@ -42,31 +41,15 @@ const signUp = async (req, res) => {
         otp,
         otp_created_at: new Date(),
         otp_type: "signup",
+        otp_verified: true,
+        is_account_setup: true,
         password,
       },
       { transaction }
     );
 
-    if (!user) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: "An error occurred while registering the user",
-      });
-    }
-
     const fullname = `${user.firstName} ${user.lastName}`;
-    const otpSent = await sendOTPByEmail(user.email, otp, fullname);
-
-    if (!otpSent) {
-      await DB.User.destroy({ where: { id: user.id }, transaction });
-      await DB.Token.destroy({ where: { userId: user.id }, transaction });
-      await transaction.rollback();
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send OTP. Please try again.",
-      });
-    }
+    await sendOTPByEmail(user.email, otp, fullname);
 
     const tokenRecord = await DB.Token.create(
       {
@@ -97,14 +80,14 @@ const signUp = async (req, res) => {
       token,
     });
   } catch (error) {
-    console.error("Error signing up user:", error);
     await transaction.rollback();
+    console.error("Error signing up user:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 };
 
 // login user with email and password
-const login = async (req, res) => {
+const loginUser = async (req, res) => {
   const { email, password, device_id, device_type, device_token } = req.body;
 
   try {
@@ -127,33 +110,26 @@ const login = async (req, res) => {
 
     const otp = generateOTP();
     const fullname = `${user.firstName} ${user.lastName}`;
-    const otpSent = await sendOTPByEmail(user.email, otp, fullname);
-
-    if (!otpSent) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send OTP. Please try again.",
-      });
-    }
+    await sendOTPByEmail(user.email, otp, fullname);
 
     user.otp = otp;
     user.otp_created_at = new Date();
     user.otp_type = "login";
+    user.otp_verified = true;
+    user.is_account_setup = true;
     await user.save();
 
     let tokenRecord = await DB.Token.findOne({
       where: { device_id, userId: user.id },
       paranoid: false,
+      transaction,
     });
 
     if (tokenRecord) {
-      if (tokenRecord.deletedAt) {
-        await tokenRecord.restore();
-      }
       tokenRecord.device_token = device_token;
       tokenRecord.device_type = device_type;
       tokenRecord.is_deleted = false;
-      const currentVersion = tokenRecord.tokenVersion || 0;
+      const currentVersion = tokenRecord.tokenVersion;
       const randomIncrement = Math.floor(1 + Math.random() * 9);
       tokenRecord.tokenVersion = currentVersion + randomIncrement;
       await tokenRecord.save();
@@ -186,25 +162,9 @@ const login = async (req, res) => {
   }
 };
 
-const logout = async (req, res) => {
+const logoutUser = async (req, res) => {
   try {
-    const token = await DB.Token.findOne({
-      where: {
-        userId: req.user.id,
-        id: req.token.id,
-        tokenVersion: req.token.tokenVersion,
-      },
-    });
-
-    if (!token) {
-      return res.status(404).json({
-        success: false,
-        message: "No active session found for this device.",
-      });
-    }
-
-    token.is_deleted = true;
-    await token.destroy();
+    await req.token.destroy();
 
     return res.status(200).json({
       success: true,
@@ -232,13 +192,16 @@ const verifyOtp = async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
-    if (
-      user.otp != otp ||
-      (user.otp_type !== "signup" && user.otp_type !== "login")
-    ) {
+    if (user.otp != otp) {
       return res.status(400).json({
         success: false,
         message: "OTP Invalid. Please enter valid OTP",
+      });
+    }
+    if (user.otp_type !== "signup" && user.otp_type !== "login") {
+      return res.status(400).json({
+        success: false,
+        message: "OTP Type Invalid.",
       });
     }
 
@@ -258,7 +221,7 @@ const verifyOtp = async (req, res) => {
       otp: null,
       otp_created_at: null,
       otp_type: null,
-      otp_verified: true,
+      otp_verified: false,
     });
 
     return res
@@ -286,7 +249,7 @@ const resendOTP = async (req, res) => {
     }
 
     if (user.otp_type !== "signup" && user.otp_type !== "login") {
-      return res.status(400).json({
+      return res.status(401).json({
         success: false,
         message: "Invalid OTP type. Please request a new OTP",
       });
@@ -312,13 +275,7 @@ const resendOTP = async (req, res) => {
     });
 
     const fullname = `${user.firstName} ${user.lastName}`;
-    const sendOTP = await sendOTPByEmail(user.email, newOTP, fullname);
-    if (!sendOTP) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send OTP. Please try again.",
-      });
-    }
+    await sendOTPByEmail(user.email, newOTP, fullname);
 
     return res.status(200).json({
       success: true,
@@ -335,7 +292,7 @@ const resendOTP = async (req, res) => {
 };
 
 // send forgot password otp in email
-const forgotPassword = async (req, res) => {
+const requestPasswordReset = async (req, res) => {
   const { email } = req.body;
 
   try {
@@ -356,13 +313,7 @@ const forgotPassword = async (req, res) => {
     });
 
     const fullname = `${user.firstName} ${user.lastName}`;
-    const sendOtp = await sendOTPByEmail(user.email, OTP, fullname);
-    if (!sendOtp) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send OTP. Please try again.",
-      });
-    }
+    await sendOTPByEmail(user.email, OTP, fullname);
 
     return res.status(200).json({
       success: true,
@@ -378,11 +329,31 @@ const forgotPassword = async (req, res) => {
   }
 };
 
-const verifyOtpForForgotPassword = async (req, res) => {
+const verifyOtpForPasswordReset = async (req, res) => {
   const { email, otp } = req.body;
 
   try {
-    const user = await DB.User.findOne({ where: { email } });
+    // const user = await DB.User.findOne({ where: { email } });
+
+    // if (!user) {
+    //   return res
+    //     .status(404)
+    //     .json({ success: false, message: "User not found" });
+    // }
+
+    // if (user.otp != otp || user.otp_type !== "forgot_password") {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "OTP Invalid. Please enter valid OTP",
+    //   });
+    // }
+
+    const user = await DB.User.findOne({
+      where: {
+        email,
+        otp_type: "forgot_password",
+      },
+    });
 
     if (!user) {
       return res
@@ -390,7 +361,7 @@ const verifyOtpForForgotPassword = async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
-    if (user.otp != otp || user.otp_type !== "forgot_password") {
+    if (user.otp !== otp) {
       return res.status(400).json({
         success: false,
         message: "OTP Invalid. Please enter valid OTP",
@@ -428,7 +399,7 @@ const verifyOtpForForgotPassword = async (req, res) => {
 };
 
 // reset password after verify otp
-const resetPassword = async (req, res) => {
+const resetUserPassword = async (req, res) => { 
   const { email, newPassword } = req.body;
 
   try {
@@ -458,7 +429,6 @@ const resetPassword = async (req, res) => {
     });
 
     await DB.Token.destroy({ where: { userId: user.id } });
-    await DB.Token.update({ is_deleted: true }, { where: { userId: user.id } });
 
     return res.status(200).json({
       success: true,
@@ -473,11 +443,18 @@ const resetPassword = async (req, res) => {
   }
 };
 
-const resendOTPForPassword = async (req, res) => {
+const resendOtpForPasswordReset = async (req, res) => {
   const { email } = req.body;
 
   try {
-    const user = await DB.User.findOne({ where: { email } });
+    // const user = await DB.User.findOne({ where: { email } });
+    const user = await DB.User.findOne({
+      where: {
+        email,
+        otp_type: "forgot_password",
+      },
+    });
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -485,12 +462,12 @@ const resendOTPForPassword = async (req, res) => {
       });
     }
 
-    if (user.otp_type !== "forgot_password") {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid OTP type.",
-      });
-    }
+    // if (user.otp_type !== "forgot_password") {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Invalid OTP type.",
+    //   });
+    // }
 
     // Check if the user has recently requested an OTP
     const otpRequestLimit = 1 * 60 * 1000; // valid 1 minitue
@@ -535,16 +512,19 @@ const resendOTPForPassword = async (req, res) => {
 };
 
 // change current password
-const changePassword = async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
+const changeUserPassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
 
   try {
     // same password not allow
-    const isSamePassword = await bcrypt.compare(oldPassword, req.user.password);
-    if (isSamePassword) {
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      req.user.password
+    );
+    if (!isPasswordValid) {
       return res.status(400).json({
         success: false,
-        message: "New password cannot be the same as the old password",
+        message: "Current Password not valid",
       });
     }
 
@@ -552,36 +532,21 @@ const changePassword = async (req, res) => {
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
     await req.user.update({ password: hashedNewPassword });
 
-    const token = await DB.Token.findOne({
+
+    await req.token.destroy({
       where: {
-        userId: req.user.id,
-        id: req.token.id,
+        userId: req.token.userId,
+        id: { [Op.ne]: req.token.id },
       },
     });
-
-    if (token) {
-      // delete other deveice
-      await DB.Token.destroy({
-        where: {
-          userId: req.user.id,
-          id: { [Op.ne]: token.id },
-        },
-      });
-      token.is_deleted = false;
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: "Token not found for the current session",
-      });
-    }
 
     return res.status(200).json({
       success: true,
       message:
-        "Password changed successfully. Other sessions have been logged out.",
+        "Password changed Successfully. Other sessions have been logged out.",
     });
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error in changed password:", error);
     return res
       .status(500)
       .json({ success: false, message: "Internal Server Error" });
@@ -589,7 +554,7 @@ const changePassword = async (req, res) => {
 };
 
 // upload profile image
-const addProfileImage = async (req, res) => {
+const uploadProfileImage = async (req, res) => {
   try {
     //set this validation on validation file
     if (!req.file) {
@@ -613,8 +578,8 @@ const addProfileImage = async (req, res) => {
   }
 };
 
-// edit prodile detail
-const editProfile = async (req, res) => {
+// update Profile  detail
+const updateProfile = async (req, res) => {
   const { firstName, lastName, email } = req.body;
 
   try {
@@ -623,7 +588,7 @@ const editProfile = async (req, res) => {
         .status(400)
         .json({ success: false, message: "Email is already in use" });
     }
-  
+
     // Update the user profile fields
     const updatedUser = {
       firstName: firstName || req.user.firstName,
@@ -664,29 +629,16 @@ const editProfile = async (req, res) => {
   }
 };
 
-// retrive profile detail including deveice detail
-const getProfile = async (req, res) => {
-  const getdata = await DB.User.findByPk(req.user.id, {
-    attributes: { exclude: ["password"] },
-    include: [
-      {
-        model: DB.Token,
-        as: "tokens",
-      },
-    ],
-  });
-
-  if (!getdata) {
-    return res.status(403).json({ message: "data not found" });
-  }
-
+// retrive profile detail
+const getUserProfile = async (req, res) => {
+  const { password, ...userData } = req.user.dataValues;
   return res
     .status(200)
-    .json({ message: "Data retrieved successfully", data: getdata });
+    .json({ message: "Data retrieved successfully", userData });
 };
 
 // delete account
-const deleteAccount = async (req, res) => {
+const deleteUserAccount = async (req, res) => {
   try {
     await req.user.destroy();
     return res
@@ -701,18 +653,18 @@ const deleteAccount = async (req, res) => {
 };
 
 module.exports = {
-  signUp,
+  signUpUser,
   verifyOtp,
   resendOTP,
-  login,
-  logout,
-  forgotPassword,
-  verifyOtpForForgotPassword,
-  resetPassword,
-  resendOTPForPassword,
-  changePassword,
-  addProfileImage,
-  editProfile,
-  getProfile,
-  deleteAccount,
+  loginUser,
+  logoutUser,
+  requestPasswordReset,
+  verifyOtpForPasswordReset,
+  resetUserPassword,
+  resendOtpForPasswordReset,
+  changeUserPassword,
+  uploadProfileImage,
+  updateProfile,
+  getUserProfile,
+  deleteUserAccount,
 };
