@@ -4,7 +4,7 @@ const generateToken = require("../utils/jwtTokenHandler");
 const { sendOTPByEmail, generateOTP } = require("../helper/helper");
 const fs = require("fs");
 const path = require("path");
-const sequelize = require("sequelize");
+const { Op } = require("sequelize");
 
 // sign up new account
 const signUp = async (req, res) => {
@@ -42,7 +42,6 @@ const signUp = async (req, res) => {
         otp,
         otp_created_at: new Date(),
         otp_type: "signup",
-        // otp_verified: false,
         password,
       },
       { transaction }
@@ -128,7 +127,7 @@ const login = async (req, res) => {
 
     const otp = generateOTP();
     const fullname = `${user.firstName} ${user.lastName}`;
-    const otpSent = await sendOTPByEmail(email, otp, fullname);
+    const otpSent = await sendOTPByEmail(user.email, otp, fullname);
 
     if (!otpSent) {
       return res.status(500).json({
@@ -140,7 +139,6 @@ const login = async (req, res) => {
     user.otp = otp;
     user.otp_created_at = new Date();
     user.otp_type = "login";
-    // user.otp_verified = false;
     await user.save();
 
     let tokenRecord = await DB.Token.findOne({
@@ -306,13 +304,6 @@ const resendOTP = async (req, res) => {
     }
 
     const newOTP = generateOTP();
-    if (!newOTP) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send OTP. Please try again.",
-      });
-    }
-
     await user.update({
       otp: newOTP,
       otp_created_at: new Date(),
@@ -321,7 +312,13 @@ const resendOTP = async (req, res) => {
     });
 
     const fullname = `${user.firstName} ${user.lastName}`;
-    await sendOTPByEmail(email, newOTP, fullname);
+    const sendOTP = await sendOTPByEmail(user.email, newOTP, fullname);
+    if (!sendOTP) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send OTP. Please try again.",
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -351,7 +348,6 @@ const forgotPassword = async (req, res) => {
     }
 
     const OTP = generateOTP();
-
     await user.update({
       otp: OTP,
       otp_created_at: new Date(),
@@ -360,7 +356,7 @@ const forgotPassword = async (req, res) => {
     });
 
     const fullname = `${user.firstName} ${user.lastName}`;
-    const sendOtp = await sendOTPByEmail(email, OTP, fullname);
+    const sendOtp = await sendOTPByEmail(user.email, OTP, fullname);
     if (!sendOtp) {
       return res.status(500).json({
         success: false,
@@ -452,6 +448,7 @@ const resetPassword = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
+
     await user.update({
       password: hashedPassword,
       otp: null,
@@ -460,9 +457,8 @@ const resetPassword = async (req, res) => {
       otp_verified: false,
     });
 
-    const token = await DB.Token.findOne({ where: { userId: user.id } });
-    await DB.Token.destroy({ where: { userId: token.userId } });
-    token.is_deleted = true;
+    await DB.Token.destroy({ where: { userId: user.id } });
+    await DB.Token.update({ is_deleted: true }, { where: { userId: user.id } });
 
     return res.status(200).json({
       success: true,
@@ -508,13 +504,6 @@ const resendOTPForPassword = async (req, res) => {
     }
 
     const newOTP = generateOTP();
-    if (!newOTP) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send OTP. Please try again.",
-      });
-    }
-
     await user.update({
       otp: newOTP,
       otp_created_at: new Date(),
@@ -523,7 +512,13 @@ const resendOTPForPassword = async (req, res) => {
     });
 
     const fullname = `${user.firstName} ${user.lastName}`;
-    await sendOTPByEmail(email, newOTP, fullname);
+    const sendOTP = await sendOTPByEmail(user.email, newOTP, fullname);
+    if (!sendOTP) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send OTP. Please try again.",
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -569,7 +564,7 @@ const changePassword = async (req, res) => {
       await DB.Token.destroy({
         where: {
           userId: req.user.id,
-          id: { [sequelize.Op.ne]: token.id },
+          id: { [Op.ne]: token.id },
         },
       });
       token.is_deleted = false;
@@ -622,13 +617,13 @@ const addProfileImage = async (req, res) => {
 const editProfile = async (req, res) => {
   const { firstName, lastName, email } = req.body;
 
-  if (email === req.user.email) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Email is already in use" });
-  }
-
   try {
+    if (email === req.user.email) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Email is already in use" });
+    }
+  
     // Update the user profile fields
     const updatedUser = {
       firstName: firstName || req.user.firstName,
