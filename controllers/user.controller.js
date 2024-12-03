@@ -122,7 +122,6 @@ const loginUser = async (req, res) => {
     let tokenRecord = await DB.Token.findOne({
       where: { device_id, userId: user.id },
       paranoid: false,
-      transaction,
     });
 
     if (tokenRecord) {
@@ -399,7 +398,7 @@ const verifyOtpForPasswordReset = async (req, res) => {
 };
 
 // reset password after verify otp
-const resetUserPassword = async (req, res) => { 
+const resetUserPassword = async (req, res) => {
   const { email, newPassword } = req.body;
 
   try {
@@ -532,7 +531,6 @@ const changeUserPassword = async (req, res) => {
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
     await req.user.update({ password: hashedNewPassword });
 
-
     await req.token.destroy({
       where: {
         userId: req.token.userId,
@@ -557,13 +555,14 @@ const changeUserPassword = async (req, res) => {
 const uploadProfileImage = async (req, res) => {
   try {
     //set this validation on validation file
-    if (!req.file) {
+    const file = req.file.filename;
+    if (!file) {
       return res
         .status(400)
         .json({ success: false, message: "No file uploaded" });
     }
 
-    await req.user.update({ profile: req.file.filename });
+    await req.user.update({ profile: file });
 
     return res.status(200).json({
       success: true,
