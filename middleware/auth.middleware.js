@@ -22,8 +22,8 @@ const verifyToken = async (req, res, next) => {
     }
 
     const decodedToken = jwt.verify(token, process.env.accessKey);
-
     const { userId, tokenId, tokenVersion } = decodedToken;
+    
     if (!userId || !tokenId || !tokenVersion) {
       return res
         .status(401)
@@ -33,10 +33,10 @@ const verifyToken = async (req, res, next) => {
     const user = await User.findByPk(userId);
     const tokens = await Token.findByPk(tokenId);
 
-    if (!user || !tokens || (tokens.tokenVersion !== tokenVersion)) {
+    if (!user || !tokens || tokens.tokenVersion !== tokenVersion) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-    
+
     req.user = user;
     req.token = tokens;
     next();

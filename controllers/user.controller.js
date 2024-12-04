@@ -112,22 +112,22 @@ const loginUser = async (req, res) => {
     const fullname = `${user.firstName} ${user.lastName}`;
     await sendOTPByEmail(user.email, otp, fullname);
 
-    user.otp = otp;
-    user.otp_created_at = new Date();
-    user.otp_type = "login";
-    user.otp_verified = true;
-    user.is_account_setup = true;
+    await user.update({
+      otp: otp,
+      otp_created_at: new Date(),
+      otp_type: "login",
+      otp_verified: true,
+      is_account_setup: true,
+    });
     await user.save();
 
     let tokenRecord = await DB.Token.findOne({
       where: { device_id, userId: user.id },
-      paranoid: false,
     });
 
     if (tokenRecord) {
       tokenRecord.device_token = device_token;
       tokenRecord.device_type = device_type;
-      tokenRecord.is_deleted = false;
       const currentVersion = tokenRecord.tokenVersion;
       const randomIncrement = Math.floor(1 + Math.random() * 9);
       tokenRecord.tokenVersion = currentVersion + randomIncrement;
@@ -138,7 +138,6 @@ const loginUser = async (req, res) => {
         device_type,
         device_token,
         tokenVersion: Math.floor(1 + Math.random() * 9),
-        is_deleted: false,
         userId: user.id,
       });
     }
@@ -555,7 +554,8 @@ const changeUserPassword = async (req, res) => {
 const uploadProfileImage = async (req, res) => {
   try {
     //set this validation on validation file
-    const file = req.file.filename;
+    const file = req.file?.filename;
+
     if (!file) {
       return res
         .status(400)
@@ -563,11 +563,12 @@ const uploadProfileImage = async (req, res) => {
     }
 
     await req.user.update({ profile: file });
+    const { password, ...userData } = req.user.dataValues;
 
     return res.status(200).json({
       success: true,
       message: "Profile Image upload successfully",
-      user: req.user,
+      user: userData,
     });
   } catch (error) {
     console.error("Profile Image upload Error:", error);
@@ -610,15 +611,16 @@ const updateProfile = async (req, res) => {
           console.log(`Old image not found: ${oldImagePath}`);
         }
       }
-      updatedUser.profile = req.file.filename;
+      updatedUser.profile = req.file?.filename;
     }
 
     await req.user.update(updatedUser);
+    const { password, ...userData } = req.user.dataValues;
 
     return res.status(200).json({
       success: true,
       message: "Profile updated successfully",
-      user: req.user,
+      user: userData,
     });
   } catch (error) {
     console.error("Profile update Error:", error);
