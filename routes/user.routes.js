@@ -3,7 +3,7 @@ const router = require("express").Router();
 const user = require("../controllers/user.controller");
 const verifyToken = require("../middleware/auth.middleware");
 const upload = require("../middleware/multer.middleware");
-const validator = require("../middleware/validaton.middleware");
+const validator = require("../utils/validatonHandler");
 const validaton = require("../validation/validation");
 
 // signup user
