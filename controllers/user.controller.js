@@ -246,10 +246,13 @@ const resendOTP = async (req, res) => {
       });
     }
 
-    if (user.otp_type !== "signup" && user.otp_type !== "login") {
+    if (
+      !user.otp_type ||
+      (user.otp_type !== "signup" && user.otp_type !== "login")
+    ) {
       return res.status(401).json({
         success: false,
-        message: "Invalid OTP type. Please request a new OTP",
+        message: "Please initiate the proper flow (like Forgot Password) to request an OTP.",
       });
     }
 
@@ -445,13 +448,7 @@ const resendOtpForPasswordReset = async (req, res) => {
   const { email } = req.body;
 
   try {
-    // const user = await DB.User.findOne({ where: { email } });
-    const user = await DB.User.findOne({
-      where: {
-        email,
-        otp_type: "forgot_password",
-      },
-    });
+    const user = await DB.User.findOne({ where: { email } });
 
     if (!user) {
       return res.status(404).json({
@@ -460,12 +457,12 @@ const resendOtpForPasswordReset = async (req, res) => {
       });
     }
 
-    // if (user.otp_type !== "forgot_password") {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Invalid OTP type.",
-    //   });
-    // }
+    if (!user.otp_type || user.otp_type !== "forgot_password") {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or missing OTP type.",
+      });
+    }
 
     // Check if the user has recently requested an OTP
     const otpRequestLimit = 1 * 60 * 1000; // valid 1 minitue
@@ -533,7 +530,7 @@ const changeUserPassword = async (req, res) => {
     await DB.Token.destroy({
       where: {
         userId: req.token.userId,
-        id: { [Op.ne]: req.token.id }, 
+        id: { [Op.ne]: req.token.id },
       },
     });
 
