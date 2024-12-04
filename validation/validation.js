@@ -26,7 +26,7 @@ const verifyOtpValidation = {
   body: Joi.object({
     email: Joi.string().email().required(),
     otp: Joi.number().integer().min(1000).max(9999).required().messages({
-      "number.base": "OTP must be a 4-digit number",
+      "number.base": "OTP must be a number",
       "number.min": "OTP must be a 4-digit number",
       "number.max": "OTP must be a 4-digit number",
       "any.required": "OTP is required",
