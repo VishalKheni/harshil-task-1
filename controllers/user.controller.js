@@ -530,10 +530,10 @@ const changeUserPassword = async (req, res) => {
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
     await req.user.update({ password: hashedNewPassword });
 
-    await req.token.destroy({
+    await DB.Token.destroy({
       where: {
         userId: req.token.userId,
-        id: { [Op.ne]: req.token.id },
+        id: { [Op.ne]: req.token.id }, 
       },
     });
 
