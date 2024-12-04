@@ -1,10 +1,12 @@
 const router = require("express").Router();
 
 const user = require("../controllers/user.controller");
-const verifyToken = require("../middleware/auth.middleware");
-const upload = require("../middleware/multer.middleware");
 const validator = require("../utils/validatonHandler");
 const validaton = require("../validation/validation");
+const upload = require("../middleware/multer.middleware");
+const uploadImage = upload.single("profile");
+const verifyToken = require("../middleware/auth.middleware");
+
 
 // signup user
 router.post("/signup", validator(validaton.signupValidation), user.signUpUser);
@@ -65,7 +67,6 @@ router.put(
 );
 
 // upload profile image
-const uploadImage = upload.single("profile");
 router.post("/upload_image", verifyToken, uploadImage, user.uploadProfileImage);
 
 // update profile detail
