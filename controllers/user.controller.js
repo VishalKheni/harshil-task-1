@@ -5,6 +5,10 @@ const { sendOTPByEmail, generateOTP } = require("../helper/helper");
 const fs = require("fs");
 const path = require("path");
 const { Op } = require("sequelize");
+const { sendOTPByEmail, sendContactUsEmail } = require("../helper/email");
+const validateFiles = require('../utils/fileValidation');
+const { PhoneNumberUtil, PhoneNumberFormat } = require("google-libphonenumber");
+const phoneUtil = PhoneNumberUtil.getInstance()
 
 // sign up new account
 const signUpUser = async (req, res) => {
@@ -609,7 +613,8 @@ const updateProfile = async (req, res) => {
         }
       }
       updatedUser.profile = req.file?.filename;
-    }
+    } 
+
 
     await req.user.update(updatedUser);
     const { password, ...userData } = req.user.dataValues;
@@ -666,3 +671,33 @@ module.exports = {
   getUserProfile,
   deleteUserAccount,
 };
+
+// let { profile_image } = req.files;
+
+// try {
+//     var number = phoneUtil.parse(req.body.mobilenumber, req.body.iso_code);
+// } catch {
+//     return res.status(400).json({ Status: 0, message: "Number or ISO code not matched" });
+// }
+
+// const isValid = phoneUtil.isValidNumber(number);
+// if (!isValid) return res.status(400).json({ Status: 0, message: "Phone number is not correct" });
+
+// const isCorrectISO = phoneUtil.getRegionCodeForNumber(number) === req.body.iso_code;
+// if (!isCorrectISO) return res.status(400).json({ Status: 0, message: "ISO CODE does not match country code" });
+
+
+// const validation = await validateFiles(profile_image, ["jpg", "jpeg", "png", "webp"], 10 * 1024 * 1024);
+// if (!validation.valid) return res.status(400).json({ Status: 0, message: validation.message });
+
+// const ext = profile_image[0].originalname.split(".").pop();
+// const imageUrlMedia = profile_image[0].filename;
+// const imageUrlWithExt = `${profile_image[0].filename}.${ext}`;
+
+// // Rename the file with the extension
+// await fs.rename(
+//     `uploads/profile_image/${imageUrlMedia}`,
+//     `uploads/profile_image/${imageUrlWithExt}`
+// );
+
+// const imageurl = `profile_image/${imageUrlWithExt}`;
